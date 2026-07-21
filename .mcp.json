@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "secondhand": {
+      "command": "npx",
+      "args": ["-y", "secondhand-mcp"],
+      "env": {
+        "MARKETPLACES": "facebook"
+      }
+    }
+  }
+}
