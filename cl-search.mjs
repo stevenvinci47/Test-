@@ -57,11 +57,12 @@ function decodeItem(item) {
 
   const segs = slug.split("-");
   const yr = (slug.match(/\b(19|20)\d{2}\b/) || [])[0];
-  // Price: prefer a structured number in range; else a slug segment that looks
-  // like a price (in range, not the model year).
-  let price =
-    numbers.find((n) => Number.isInteger(n) && n >= minPrice && n <= maxPrice && String(n) !== yr) ||
-    segs.map(Number).find((n) => n >= minPrice && n <= maxPrice && String(n) !== yr);
+  // Price lives in the slug (city-year-model-PRICE-suffix). Take the largest
+  // in-range slug number that isn't the year; fall back to the item's numbers.
+  const slugNums = segs.map(Number).filter((n) => Number.isFinite(n) && n >= minPrice && n <= maxPrice && String(n) !== yr);
+  let price = slugNums.length
+    ? Math.max(...slugNums)
+    : numbers.filter((n) => Number.isInteger(n) && n >= minPrice && n <= maxPrice && String(n) !== yr).sort((a, b) => b - a)[0];
   // Location = the leading city segment(s) before the year.
   const yi = yr ? segs.indexOf(yr) : -1;
   const loc = (yi > 0 ? segs.slice(0, yi) : [segs[0]]).join(" ").replace(/\b\w/g, (c) => c.toUpperCase());

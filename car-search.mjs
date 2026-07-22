@@ -14,12 +14,19 @@
 //   node car-search.mjs roadsters 2500
 //   node car-search.mjs "mazda miata" 3000 800
 
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 
 const RAW = (process.argv[2] || "roadsters").toLowerCase();
-const maxPrice = Number(process.argv[3] || 2500);
+const maxPrice = Number(process.argv[3] || 3000);
 const minPrice = Number(process.argv[4] || 1); // Facebook floods cars with $1 bait prices, so no real floor
 const perSearch = 40;
+
+// Capture everything we print so we can save it to a file and copy it to the
+// clipboard at the end (progress messages go to stderr and are NOT captured).
+const captured = [];
+const _log = console.log.bind(console);
+console.log = (...a) => { const s = a.join(" "); captured.push(s); _log(s); };
 const CURRENT_YEAR = new Date().getFullYear();
 // Model catalog. Each row: [search term, keyword to match in a title, tag, category].
 // 🟢 reliable daily · 🟡 fun, check upkeep · 🟠 cool but pricey to keep · 🔴 iconic money-pit / rarely real at budget
@@ -212,6 +219,65 @@ async function search(term, location) {
   return (res.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
 }
 
+// ---- Craigslist (SAPI JSON feed; real prices, no $1 bait) ----
+const CL_POSTAL = "90802"; // Long Beach
+const CL_UA = "Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
+const CL_SPAM = /priced to (sale|sell)|money back|passed smog|cold ac|🔷|❗|✅|call or text|se habla|\bwholesale\b|no credit|buy here pay here|\bbhph\b|financing available/i;
+
+function clDecode(item, floor, ceil) {
+  if (!Array.isArray(item)) return null;
+  const strings = [], numbers = [];
+  const walk = (v) => {
+    if (typeof v === "string") strings.push(v);
+    else if (typeof v === "number") numbers.push(v);
+    else if (Array.isArray(v)) v.forEach(walk);
+    else if (v && typeof v === "object") Object.values(v).forEach(walk);
+  };
+  walk(item);
+  const slug = strings.filter((s) => /^[a-z0-9]+(-[a-z0-9]+){3,}$/.test(s)).sort((a, b) => b.length - a.length)[0];
+  if (!slug) return null;
+  const segs = slug.split("-");
+  const yr = (slug.match(/\b(19|20)\d{2}\b/) || [])[0];
+  // Price lives in the slug (city-year-model-PRICE-suffix). Take the largest
+  // in-range slug number that isn't the year; fall back to the item's numbers.
+  const slugNums = segs.map(Number).filter((n) => Number.isFinite(n) && n >= floor && n <= ceil && String(n) !== yr);
+  const price = slugNums.length
+    ? Math.max(...slugNums)
+    : numbers.filter((n) => Number.isInteger(n) && n >= floor && n <= ceil && String(n) !== yr).sort((a, b) => b - a)[0];
+  const yi = yr ? segs.indexOf(yr) : -1;
+  const loc = (yi > 0 ? segs.slice(0, yi) : [segs[0]]).join(" ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const rest = (yi >= 0 ? segs.slice(yi) : segs).filter(
+    (s) => !/^(obo|firm|cash|clean|title|runs|great|nice|price|neg|negotiable)$/.test(s) && !(/^\d+$/.test(s) && s !== yr)
+  );
+  return { slug, title: rest.join(" ").replace(/\b\w/g, (c) => c.toUpperCase()), price, loc };
+}
+
+async function clSearch(model) {
+  const floor = Math.max(minPrice, 1);
+  const url =
+    `https://sapi.craigslist.org/web/v8/postings/search/full?batch=1-0-360-0-0&cc=US&lang=en&searchPath=cta` +
+    `&query=${encodeURIComponent(model)}&min_price=${floor}&max_price=${maxPrice}&searchDistance=250&postal=${CL_POSTAL}&sort=date`;
+  let items;
+  try {
+    const r = await fetch(url, { headers: { "User-Agent": CL_UA, Accept: "application/json" } });
+    items = JSON.parse(await r.text())?.data?.items;
+  } catch { return []; }
+  if (!Array.isArray(items)) return [];
+  const key = model.split(/\s+/).pop().toLowerCase();
+  const out = [], seen = new Set();
+  for (const it of items) {
+    const d = clDecode(it, floor, maxPrice);
+    if (!d) continue;
+    if (CL_SPAM.test(d.slug)) continue;
+    if (!d.slug.includes(key)) continue;
+    if (!isConvertible(d.slug)) continue;
+    if (seen.has(d.slug)) continue;
+    seen.add(d.slug);
+    out.push(d);
+  }
+  return out;
+}
+
 try {
   await send("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "car-search", version: "3.0.0" } });
   notify("notifications/initialized", {});
@@ -260,21 +326,42 @@ try {
     }
   }
 
-  // Craigslist native 250-mile radius searches. CL supports search_distance +
-  // postal, so ONE link per model covers the whole area from Long Beach. CL
-  // blocks headless scraping and dropped its public API, so deep links beat a
-  // fragile terminal scraper. One CL search per model in the active sweep, to
-  // match the Facebook breadth.
-  const POSTAL = "90802"; // Long Beach, CA
+  // --- Craigslist: real listings via SAPI (real prices, no $1 bait) ---
   const clModels = catalogMode ? models.map((r) => r[0]) : [RAW];
-  console.log(`=== Craigslist: 250-mile radius searches from Long Beach (clean title, $${minPrice}-$${maxPrice}) ===`);
-  console.log(`(open in a browser; each covers the full ${clModels.length > 1 ? "area for that model" : "250-mile area"})\n`);
+  process.stderr.write(`\nsweeping Craigslist for ${clModels.length} models...\n`);
+  const clAll = [], clSeen = new Set();
   for (const m of clModels) {
-    const q = encodeURIComponent(m);
-    console.log(`${m}:`);
-    console.log(`   https://losangeles.craigslist.org/search/cta?query=${q}&min_price=${minPrice}&max_price=${maxPrice}&search_distance=250&postal=${POSTAL}&auto_title_status=1`);
+    process.stderr.write(`craigslist "${m}"...\n`);
+    for (const d of await clSearch(m)) {
+      if (clSeen.has(d.slug)) continue;
+      clSeen.add(d.slug);
+      d.tag = tagFor(d.title);
+      clAll.push(d);
+    }
   }
-  console.log("");
+  clAll.sort((a, b) => (a.price || 1e9) - (b.price || 1e9));
+  console.log(`=== Craigslist: ${clAll.length} convertibles, $${minPrice}-$${maxPrice}, 250 mi of Long Beach (90802) ===`);
+  console.log(`(real prices — Craigslist has no $1 bait)\n`);
+  if (!clAll.length) {
+    console.log("No Craigslist convertible matches parsed this run — try again, or browse:");
+    console.log("  https://losangeles.craigslist.org/search/cta?postal=90802&search_distance=250\n");
+  } else {
+    for (const d of clAll) {
+      console.log(`${d.price ? "$" + d.price.toLocaleString() : "see listing"} - ${d.title}${d.tag ? "  " + d.tag : ""}${d.loc ? "  📍 " + d.loc : ""}`);
+    }
+    console.log("");
+  }
+
+  // Save the whole report to a file and copy it to the clipboard for easy pasting.
+  const text = captured.join("\n");
+  try { writeFileSync("car-results.txt", text); process.stderr.write("\nSaved report to car-results.txt\n"); } catch {}
+  let copied = false;
+  for (const cmd of ["termux-clipboard-set", "pbcopy", "xclip -selection clipboard", "xsel --clipboard --input"]) {
+    try { execSync(cmd, { input: text, stdio: ["pipe", "ignore", "ignore"] }); copied = true; break; } catch {}
+  }
+  process.stderr.write(copied
+    ? "Results copied to clipboard — just paste them here.\n"
+    : "(No clipboard tool found. Run `pkg install termux-api` once, or open car-results.txt to copy.)\n");
 } finally {
   child.stdin.end(); child.kill(); process.exit(0);
 }
