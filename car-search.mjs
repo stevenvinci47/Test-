@@ -18,7 +18,7 @@ import { spawn } from "node:child_process";
 
 const RAW = (process.argv[2] || "roadsters").toLowerCase();
 const maxPrice = Number(process.argv[3] || 2500);
-const minPrice = Number(process.argv[4] || 800); // real running cars ~never list below this
+const minPrice = Number(process.argv[4] || 1); // Facebook floods cars with $1 bait prices, so no real floor
 const perSearch = 40;
 const CURRENT_YEAR = new Date().getFullYear();
 // Model catalog. Each row: [search term, keyword to match in a title, tag, category].
@@ -123,14 +123,18 @@ const KILL = /salvage|rebuilt|engine swap|for parts|parts only|part out|mechanic
 
 const yearOf = (t) => { const m = t.match(/\b(19|20)\d{2}\b/); return m ? Number(m[0]) : null; };
 
+// NOTE: Facebook shows a bogus $1/$0 "bait" price on a huge share of car
+// listings (sellers do it to jump into cheap searches; the real price is inside
+// the listing). So we CANNOT trust the displayed price to filter — instead we
+// keep older cars even at a bait price, and use the year+price combo only to
+// kill the obvious modern-car scams ("$1 2024 Corvette").
 function looksFake(l) {
   const y = yearOf(l.title);
   if (!y) return true;                          // no model year -> not a real car post
   if (y > CURRENT_YEAR + 1) return true;        // impossible future year -> spam
-  if (l.num < minPrice) return true;            // $0/$1 bait or parts
-  if (y >= 2016 && l.num < 4000) return true;   // late-model car this cheap -> bait/scam
+  if (y >= 2012 && l.num < 3000) return true;   // a <~14yr car this cheap = bait/scam
   if (FAR_AWAY.test(l.loc)) return true;        // outside ~250 mi
-  if (!/^\$/.test(l.price)) return true;        // USD only
+  if (!/^\$/.test(l.price)) return true;        // USD only (drops €/foreign)
   if (KILL.test(l.title)) return true;          // salvage/rebuilt/parts/project
   return false;
 }
@@ -225,7 +229,8 @@ try {
   } else {
     for (const l of real) {
       const tag = tagFor(l.title);
-      console.log(`${l.price} - ${l.title}${tag ? "  " + tag : ""}`);
+      const shown = l.num <= 1 ? "price hidden — open to see" : l.price;
+      console.log(`${shown} - ${l.title}${tag ? "  " + tag : ""}`);
       if (l.loc) console.log(`   📍 ${l.loc}`);
       console.log(`   🔗 https://www.facebook.com/marketplace/item/${l.id}`);
       console.log("");
