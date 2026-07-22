@@ -19,6 +19,11 @@ const UA = "Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, li
 
 // Curbstoner / unlicensed-dealer spam patterns (flood every CL car search).
 const SPAM = /priced to (sale|sell)|money back|passed smog|cold ac|🔷|❗|✅|call or text|se habla|\bwholesale\b|no credit|buy here pay here|\bbhph\b|financing available/i;
+// Convertible gate (buyer wants open-top only). Slugs use these words, and some
+// models are always convertibles even when the slug omits the body style.
+const CONV_WORDS = /convertible|\bconv\b|roadster|spyder|spider|cabriolet|cabrio|drop-?top|soft-?top|\bvert\b/i;
+const ALWAYS_CONV = /\bmiata\b|mx-?5|\bs2000\b|boxster|solstice|saturn-?sky|\bslk\b|\bsl\b|prowler/i;
+const isConvertible = (s) => CONV_WORDS.test(s) || ALWAYS_CONV.test(s);
 
 const sapi =
   `https://sapi.craigslist.org/web/v8/postings/search/full?batch=1-0-360-0-0&cc=US&lang=en` +
@@ -89,6 +94,7 @@ try {
     if (!d) continue;
     if (SPAM.test(d.slug)) continue;                  // drop curbstoner spam
     if (!d.slug.includes(model)) continue;            // keep only this model
+    if (!isConvertible(d.slug)) continue;             // convertibles only
     rows.push(d);
   }
   // De-dupe by title+price.

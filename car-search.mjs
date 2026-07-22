@@ -131,6 +131,15 @@ const JUNK = /hot ?wheels|matchbox|die-?cast|maisto|b?burago|\bwelly\b|\bertl\b|
 
 const yearOf = (t) => { const m = t.match(/\b(19|20)\d{2}\b/); return m ? Number(m[0]) : null; };
 
+// Convertible gate — the buyer only wants open-top cars.
+const CONV_WORDS = /convertible|\bconv\b|roadster|spyder|spider|cabriolet|cabrio|drop[\s-]?top|soft[\s-]?top|\bvert\b/i;
+// Models that are essentially always convertibles, so keep them even when the
+// title omits the body style. (Models that also come as coupes — Z3/Z4, MR2,
+// Crossfire, 350Z, etc. — are NOT here; their convertible versions still pass
+// via the body-style words above, while their coupes are correctly excluded.)
+const ALWAYS_CONV = /\bmiata\b|mx-?5|\bs2000\b|boxster|solstice|saturn sky|\bslk\b|\bsl\b|prowler/i;
+const isConvertible = (title) => CONV_WORDS.test(title) || ALWAYS_CONV.test(title);
+
 // NOTE: Facebook shows a bogus $1/$0 "bait" price on a huge share of car
 // listings (sellers do it to jump into cheap searches; the real price is inside
 // the listing). So we CANNOT trust the displayed price to filter — instead we
@@ -226,6 +235,7 @@ try {
   const real = [];
   for (const l of [...byId.values()].sort((a, b) => a.num - b.num)) {
     if (looksFake(l)) continue;
+    if (!isConvertible(l.title)) continue; // buyer wants convertibles only
     l.tag = tagFor(l.title);
     if (catalogMode && !l.tag) continue; // drop tangential cars not in the catalog (Avalon, ES300, ...)
     const key = l.title.toLowerCase().replace(/[^a-z0-9]/g, "") + "|" + l.num;
