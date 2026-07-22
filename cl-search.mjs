@@ -17,8 +17,9 @@ const POSTAL = "90802"; // Long Beach
 const DEBUG = process.env.DEBUG === "1";
 const UA = "Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
 
-// Curbstoner / unlicensed-dealer spam patterns (flood every CL car search).
-const SPAM = /priced to (sale|sell)|money back|passed smog|cold ac|🔷|❗|✅|call or text|se habla|\bwholesale\b|no credit|buy here pay here|\bbhph\b|financing available/i;
+// Bad-listing patterns: curbstoner spam, scams, salvage/parts (from
+// github.com/pjdoland/used-car-finder). Tested against the de-hyphenated slug.
+const SPAM = /priced to (sale|sell)|money back|passed smog|cold ac|🔷|❗|✅|call or text|se habla|\bwholesale\b|no credit|buy here pay here|\bbhph\b|financing available|selling for (a |my )?(friend|mother|father|relative|deceased|deployment)|military deploy|will ship|can ship|\bzelle\b|\bpaypal\b|\bvenmo\b|cash ?app|ebay motors|wire transfer|gift ?card|salvage|rebuilt|branded|engine swap|swapped|mechanic special|\bproject\b|as-is|no title|lost title|bill of sale|not running|\bparts?\b|parting|part-out|\bengine\b|\btransmission\b|\bbumper\b|\bfender\b|\bexhaust\b/i;
 // Convertible gate (buyer wants open-top only). Slugs use these words, and some
 // models are always convertibles even when the slug omits the body style.
 const CONV_WORDS = /convertible|\bconv\b|roadster|spyder|spider|cabriolet|cabrio|drop-?top|soft-?top|\bvert\b/i;
@@ -93,9 +94,9 @@ try {
   for (const it of items) {
     const d = decodeItem(it);
     if (!d) continue;
-    if (SPAM.test(d.slug)) continue;                  // drop curbstoner spam
     if (!d.slug.includes(model)) continue;            // keep only this model
     if (!isConvertible(d.slug)) continue;             // convertibles only
+    if (SPAM.test(d.slug.replace(/-/g, " "))) continue; // curbstoner/scam/salvage/parts
     rows.push(d);
   }
   // De-dupe by title+price.

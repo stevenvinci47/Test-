@@ -126,7 +126,10 @@ const CL_REGIONS = ["losangeles", "orangecounty", "inlandempire", "sandiego", "v
 
 const FAR_AWAY = /Florida|Texas|Georgia|Carolina|Ohio|Illinois|New York|Washington|Oregon|Colorado|Utah|Spain|Mexico|Canada|,\s*(FL|TX|GA|NC|SC|OH|IL|NY|WA|OR|CO|UT)\b/i;
 // KILL words in the title — immediate discards (from used-car-finder playbook).
-const KILL = /salvage|rebuilt|engine swap|mechanic special|project|as[\s-]?is|no title|non[\s-]?op|doesn'?t run|not running|won'?t run|blown|bill of sale only|flood/i;
+const KILL = /salvage|rebuilt|branded|engine swap|swapped|jdm swap|mechanic special|project|as[\s-]?is|\bno title\b|lost title|bill of sale|non[\s-]?op|doesn'?t run|not running|won'?t run|\bblown\b|flood/i;
+// Outright scam signals (used-car-finder scam-patterns): shipping/payment cons
+// and "selling for a friend/relative/deployment" — hard discards.
+const SCAM = /selling for (a |my )?(friend|friends|mother|mom|father|dad|uncle|aunt|cousin|coworker|neighbor|relative|deceased|brother|sister|grandma|grandpa)|military (deployment|deploy)|being deployed|will ship|can ship|shipping (available|included|nationwide)|storage facility|\bzelle\b|\bpaypal\b|\bvenmo\b|cash ?app|ebay motors|western union|wire transfer|gift ?card/i;
 // PARTS listings — someone selling components, not a whole car. These flooded
 // the results ("parting out", "partes", "engine", "transmission", "bumper"...).
 const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bfor part\b|\bengine\b|\bmotor\b|\btransmission\b|\btranny\b|long block|\bbumper\b|\bfender\b|\bexhaust\b|\bheader\b|\bhood\b|\becu\b|\bswap\b|\brims?\b|\bwheels?\b|\bspoiler\b|duckbill|\bcoilovers?\b|\bseats?\b|\bdoor panel\b/i;
@@ -159,7 +162,8 @@ function looksFake(l) {
   if (y >= 2012 && l.num < 3000) return true;   // a <~14yr car this cheap = bait/scam
   if (FAR_AWAY.test(l.loc)) return true;        // outside ~250 mi
   if (!/^\$/.test(l.price)) return true;        // USD only (drops €/foreign)
-  if (KILL.test(l.title)) return true;          // salvage/rebuilt/project
+  if (KILL.test(l.title)) return true;          // salvage/rebuilt/project/title problems
+  if (SCAM.test(l.title)) return true;          // shipping/payment/"selling for a friend" cons
   if (PARTS.test(l.title)) return true;         // parting out / components, not a car
   if (WANTED.test(l.title)) return true;        // ISO / looking-to-buy posts
   if (JUNK.test(l.title)) return true;          // toys, diecast, manuals, small parts
@@ -268,9 +272,10 @@ async function clSearch(model) {
   for (const it of items) {
     const d = clDecode(it, floor, maxPrice);
     if (!d) continue;
-    if (CL_SPAM.test(d.slug)) continue;
+    const flat = d.slug.replace(/-/g, " "); // de-hyphenate so the shared filters match
     if (!d.slug.includes(key)) continue;
     if (!isConvertible(d.slug)) continue;
+    if (CL_SPAM.test(flat) || KILL.test(flat) || SCAM.test(flat) || PARTS.test(flat)) continue;
     if (seen.has(d.slug)) continue;
     seen.add(d.slug);
     out.push(d);
