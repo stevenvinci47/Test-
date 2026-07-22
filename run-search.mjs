@@ -27,7 +27,7 @@ const args = {
 if (maxPrice !== undefined) args.maxPrice = Number(maxPrice);
 
 // --- minimal MCP stdio client (newline-delimited JSON-RPC) ---
-const child = spawn("npx", ["-y", "secondhand-mcp"], {
+const child = spawn("npx", ["-y", `secondhand-mcp@${process.env.SECONDHAND_VER || "0.4.0"}`], {
   env: { ...process.env, MARKETPLACES: "facebook" },
   stdio: ["pipe", "pipe", "inherit"],
 });

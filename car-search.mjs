@@ -187,9 +187,13 @@ function tagFor(title) {
 }
 
 // ---- minimal MCP stdio client ----
-const child = spawn("npx", ["-y", "secondhand-mcp"], {
+// Pin to the known-good version so an upstream update can't silently break the
+// Facebook scraper (override with SECONDHAND_VER=latest if you want the newest).
+const SECONDHAND = `secondhand-mcp@${process.env.SECONDHAND_VER || "0.4.0"}`;
+const child = spawn("npx", ["-y", SECONDHAND], {
   env: { ...process.env, MARKETPLACES: "facebook" }, stdio: ["pipe", "pipe", "inherit"],
 });
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const pending = new Map();
 let buf = "";
 child.stdout.on("data", (c) => {
@@ -321,14 +325,31 @@ try {
   if (catalogMode) process.stderr.write(`sweeping ${models.length} models (this is a big scan — give it a few minutes)...\n`);
 
   const byId = new Map();
-  let raw = 0;
+  let raw = 0, fbErrors = 0, fbEmpty = 0;
   for (const [term, city] of jobs) {
     process.stderr.write(`searching "${term}" in ${city}...\n`);
+    let text = "";
     try {
-      for (const l of parseBlocks(await search(term, city))) { raw++; if (!byId.has(l.id)) byId.set(l.id, l); }
+      text = await search(term, city);
     } catch (e) {
-      process.stderr.write(`  (skipped "${term}": ${e.message})\n`); // one failure won't abort the sweep
+      fbErrors++;
+      process.stderr.write(`  (error "${term}": ${e.message})\n`); // one failure won't abort the sweep
+      await sleep(2500);
+      continue;
     }
+    const blocks = parseBlocks(text);
+    if (!blocks.length) fbEmpty++;
+    for (const l of blocks) { raw++; if (!byId.has(l.id)) byId.set(l.id, l); }
+    // Self-throttle with jitter so Facebook's bot-detection doesn't rate-limit
+    // us mid-sweep (empty results across the board = throttled).
+    await sleep(700 + Math.floor(Math.random() * 900));
+  }
+  if (!raw) {
+    process.stderr.write(
+      fbErrors >= jobs.length
+        ? "\nFacebook errored on every search (server/network). Check connection or retry.\n"
+        : "\nFacebook returned no listings — it's rate-limiting this device. Wait ~30-60 min, or run one category at a time.\n"
+    );
   }
 
   // Rank by reliability tier (🟢→🟡→🟠→🔴), then newest year (FB prices are bait).
