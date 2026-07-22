@@ -125,6 +125,9 @@ const KILL = /salvage|rebuilt|engine swap|mechanic special|project|as[\s-]?is|no
 const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bfor part\b|\bengine\b|\bmotor\b|\btransmission\b|\btranny\b|long block|\bbumper\b|\bfender\b|\bexhaust\b|\bheader\b|\bhood\b|\becu\b|\bswap\b|\brims?\b|\bwheels?\b|\bspoiler\b|duckbill|\bcoilovers?\b|\bseats?\b|\bdoor panel\b/i;
 // WANTED / ISO posts — someone looking to buy, not sell.
 const WANTED = /\blooking for\b|\bin search of\b|\biso\b|\bwtb\b|want(ed)? to buy/i;
+// JUNK — toys, diecast/scale models, literature, and small parts that carry a
+// year + a low real price ($3-$25) and so sneak past the other filters.
+const JUNK = /hot ?wheels|matchbox|die-?cast|maisto|b?burago|\bwelly\b|\bertl\b|toymax|greenlight|snapfast|1[:/]1[08]\b|1[:/]2[0-9]\b|1[:/]3[26]\b|1[:/]64\b|\bscale\b|model kit|collectible|collector car|jigsaw|puzzle|owner'?s? manual|shop manual|service manual|brochure|\bposter\b|print ad|\bmedal\b|magazine|wall decor|\blicense\b|\blamp\b|antenna|adapter|dipstick|harness|actuator|\bbrakes?\b|headlight|tail ?light|key.?fob|keyfob|fuel tank|intake pipe|\bshell\b|emblem|\bbadge\b|decal|\bstrap\b/i;
 
 const yearOf = (t) => { const m = t.match(/\b(19|20)\d{2}\b/); return m ? Number(m[0]) : null; };
 
@@ -143,6 +146,7 @@ function looksFake(l) {
   if (KILL.test(l.title)) return true;          // salvage/rebuilt/project
   if (PARTS.test(l.title)) return true;         // parting out / components, not a car
   if (WANTED.test(l.title)) return true;        // ISO / looking-to-buy posts
+  if (JUNK.test(l.title)) return true;          // toys, diecast, manuals, small parts
   return false;
 }
 
