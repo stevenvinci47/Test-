@@ -21,66 +21,97 @@ const maxPrice = Number(process.argv[3] || 2500);
 const minPrice = Number(process.argv[4] || 800); // real running cars ~never list below this
 const perSearch = 40;
 const CURRENT_YEAR = new Date().getFullYear();
-const ROADSTER_MODE = ["roadsters", "roadster", "undertheradar", "sleepers"].includes(RAW);
-
-// Under-the-radar roadsters/convertibles realistic (or dreamable) at a low budget.
-// note tag: 🟢 reliable sleeper · 🟡 fun, check upkeep · 🟠 dream pick, pricey to keep
-// Model catalog. Each row: [search term, keyword to match in a result title, tag].
+// Model catalog. Each row: [search term, keyword to match in a title, tag, category].
 // 🟢 reliable daily · 🟡 fun, check upkeep · 🟠 cool but pricey to keep · 🔴 iconic money-pit / rarely real at budget
-// Add rows freely — the sweep uses column 1, the tagging uses column 2.
+// categories: jp japanese · us american · de german · uk british+swedish · it italian
+// Run the whole thing with "sports"/"all", or one category e.g. "japanese", or a single "term".
 const ROADSTERS = [
-  // --- Japanese: the reliable-fun core ---
-  ["mazda miata",                 "miata",     "🟢 most reliable roadster — the safe sleeper"],
-  ["mazda mx-5",                  "mx-5",      "🟢 Miata (MX-5) — most reliable roadster"],
-  ["mazda rx-8",                  "rx-8",      "🟡 rotary — cheap + fun, thirsty, apex-seal risk"],
-  ["honda s2000",                 "s2000",     "🟢 legendary roadster; peaky but reliable"],
-  ["honda del sol",               "del sol",   "🟢 targa-top, bulletproof Honda"],
-  ["toyota mr2 spyder",           "mr2",       "🟢 mid-engine Toyota roadster, rare + reliable"],
-  ["toyota celica convertible",   "celica",    "🟢 reliable Toyota drop-top sleeper"],
-  ["toyota solara convertible",   "solara",    "🟢 comfy Toyota — great road-trip daily"],
-  ["nissan 350z roadster",        "350z",      "🟡 lots of car for the money"],
-  ["nissan 300zx convertible",    "300zx",     "🟡 90s icon"],
-  ["mitsubishi eclipse spyder",   "eclipse",   "🟡 cheap + sporty, verify maintenance"],
-  ["mitsubishi 3000gt spyder",    "3000gt",    "🔴 folding-hardtop unicorn, rare + pricey"],
-  // --- American: cheap, roomy, road-trip friendly ---
-  ["chrysler crossfire",          "crossfire", "🟢 Mercedes SLK underneath for pennies — top sleeper"],
-  ["ford mustang convertible",    "mustang",   "🟢 roomy + cheap parts — best road-trip daily"],
-  ["ford thunderbird",            "thunderbird","🟡 '02-05 retro is a comfy cruiser"],
-  ["chevrolet camaro convertible","camaro",    "🟡 V6 cheap, V8 fun; big cruiser"],
-  ["chevrolet corvette convertible","corvette","🟡 C4 cheap, C5 is the sweet spot"],
-  ["pontiac firebird convertible","firebird",  "🟡 F-body sibling; loud fun"],
-  ["pontiac solstice",            "solstice",  "🟡 GM roadster sleeper; usually above budget"],
-  ["cadillac allante",            "allante",   "🔴 quirky 80s/90s vert; parts are rare"],
-  ["plymouth prowler",            "prowler",   "🔴 hot-rod oddball; collector money now"],
-  // --- German: sharp but buy the service history ---
-  ["bmw z3",                      "z3",        "🟢 the reliable BMW roadster"],
-  ["bmw z4",                      "z4",        "🟡 sharper Z3 successor; solid"],
-  ["bmw 3 series convertible",    "325",       "🟡 E46 vert — buy on service history"],
-  ["bmw m3 convertible",          "m3",        "🟠 fast + costly to keep"],
-  ["mercedes slk",                "slk",       "🟡 folding hardtop — watch pump/electrics"],
-  ["mercedes clk convertible",    "clk",       "🟠 handsome cruiser; electrics bite"],
-  ["mercedes sl convertible",     " sl ",      "🟠 R129 tank but repairs bite"],
-  ["audi tt roadster",            "audi tt",   "🟠 desirable but pricey to fix"],
-  ["audi a4 cabriolet",           "a4",        "🟠 pretty; CVT + roof headaches"],
-  ["porsche boxster",             "boxster",   "🟠 dream pick — IMS-bearing risk this cheap"],
-  ["porsche 944",                 "944",       "🟠 classic; belts/parts add up"],
-  ["volkswagen cabrio",           "cabrio",    "🟡 cheap + cheerful"],
-  ["volkswagen eos",              "eos",       "🟡 hardtop vert; watch roof leaks"],
-  ["volkswagen new beetle convertible","beetle","🟡 easy, fun daily"],
-  // --- British / Swedish: character ---
-  ["jaguar xk8 convertible",      "xk8",       "🟠 gorgeous GT; Nikasil on early engines"],
-  ["jaguar xkr convertible",      "xkr",       "🟠 supercharged Jag GT; pricey to keep"],
-  ["jaguar xjs convertible",      "xjs",       "🟠 old-school GT; complex"],
-  ["mg mgb",                      "mgb",       "🔴 classic roadster; hobby car, not a daily"],
-  ["mini cooper convertible",     "mini",      "🟡 fun; watch clutch/CVT"],
-  ["volvo c70 convertible",       "c70",       "🟡 comfy cruiser, great for trips"],
-  ["saab 9-3 convertible",        "9-3",       "🟡 quirky sleeper, parts can be a hunt"],
-  ["saab 900 convertible",        "900",       "🟡 classic quirky Saab"],
-  // --- Italian: movie-car looks, exotic bills ---
-  ["alfa romeo spider",           "alfa",      "🔴 iconic; parts/rust — not a reliable daily"],
-  ["fiat 124 spider",             "fiat",      "🔴 charming; rust + parts hunt"],
-  ["maserati spyder",             "maserati",  "🔴 exotic upkeep — no real $2.5k runner"],
+  // --- Japanese ---
+  ["mazda miata",                 "miata",     "🟢 most reliable roadster — the safe sleeper", "jp"],
+  ["mazda mx-5",                  "mx-5",      "🟢 Miata (MX-5) — most reliable roadster", "jp"],
+  ["mazda rx-7",                  "rx-7",      "🟠 rotary icon; apex-seal gamble", "jp"],
+  ["mazda rx-8",                  "rx-8",      "🟡 rotary — cheap + fun, thirsty, seal risk", "jp"],
+  ["honda s2000",                 "s2000",     "🟢 legendary roadster; peaky but reliable", "jp"],
+  ["honda del sol",               "del sol",   "🟢 targa-top, bulletproof Honda", "jp"],
+  ["honda prelude",               "prelude",   "🟢 sleeper 90s coupe, reliable", "jp"],
+  ["acura integra",               "integra",   "🟢 bulletproof + fun; GS-R/Type R prized", "jp"],
+  ["acura rsx",                   "rsx",       "🟢 reliable modern-ish sport coupe", "jp"],
+  ["acura nsx",                   "nsx",       "🔴 everyday supercar — way over budget", "jp"],
+  ["toyota mr2 spyder",           "mr2",       "🟢 mid-engine Toyota roadster, rare + reliable", "jp"],
+  ["toyota supra",                "supra",     "🟠 legend — MkIV is money; MkIII attainable", "jp"],
+  ["toyota celica",               "celica",    "🟢 reliable Toyota sport coupe/vert", "jp"],
+  ["toyota solara convertible",   "solara",    "🟢 comfy Toyota — great road-trip daily", "jp"],
+  ["scion fr-s",                  "fr-s",      "🟢 BRZ twin — reliable + fun", "jp"],
+  ["subaru brz",                  "brz",       "🟢 modern lightweight coupe; reliable", "jp"],
+  ["subaru wrx",                  "wrx",       "🟡 AWD turbo; check for abuse", "jp"],
+  ["nissan 350z",                 "350z",      "🟡 lots of car for the money", "jp"],
+  ["nissan 370z",                 "370z",      "🟡 modern Z; solid", "jp"],
+  ["nissan 300zx",                "300zx",     "🟡 90s twin-turbo icon", "jp"],
+  ["nissan 240sx",                "240sx",     "🟡 drift/tuner icon; clean ones climbing", "jp"],
+  ["lexus sc300",                 "sc300",     "🟢 Supra-engine luxury coupe sleeper", "jp"],
+  ["lexus sc430",                 "sc430",     "🟡 folding-hardtop luxo cruiser", "jp"],
+  ["lexus is300",                 "is300",     "🟢 2JZ sleeper, reliable", "jp"],
+  ["infiniti g35",                "g35",       "🟡 350Z in a suit; great value", "jp"],
+  ["mitsubishi eclipse",          "eclipse",   "🟡 cheap + sporty, verify maintenance", "jp"],
+  ["mitsubishi 3000gt",           "3000gt",    "🟠 90s tech flagship; complex", "jp"],
+  // --- American ---
+  ["chrysler crossfire",          "crossfire", "🟢 Mercedes SLK underneath for pennies — top sleeper", "us"],
+  ["ford mustang",                "mustang",   "🟢 roomy + cheap parts — best road-trip daily", "us"],
+  ["ford thunderbird",            "thunderbird","🟡 '02-05 retro is a comfy cruiser", "us"],
+  ["chevrolet camaro",            "camaro",    "🟡 V6 cheap, V8 fun; big cruiser", "us"],
+  ["chevrolet corvette",          "corvette",  "🟡 C4 cheap, C5 is the sweet spot", "us"],
+  ["pontiac firebird",            "firebird",  "🟡 F-body; loud fun", "us"],
+  ["pontiac trans am",            "trans am",  "🟡 F-body icon", "us"],
+  ["pontiac gto",                 "gto",       "🟠 '04-06 LS muscle sleeper", "us"],
+  ["pontiac solstice",            "solstice",  "🟡 GM roadster sleeper", "us"],
+  ["saturn sky",                  "sky",       "🟡 Solstice twin roadster", "us"],
+  ["dodge viper",                 "viper",     "🔴 V10 monster; collector money", "us"],
+  ["dodge challenger",            "challenger","🟡 modern muscle; V6 cheap", "us"],
+  ["dodge stealth",               "stealth",   "🟠 3000GT cousin; complex", "us"],
+  ["cadillac allante",            "allante",   "🔴 quirky 80s/90s vert; parts rare", "us"],
+  ["plymouth prowler",            "prowler",   "🔴 hot-rod oddball; collector money", "us"],
+  // --- German ---
+  ["bmw z3",                      "z3",        "🟢 the reliable BMW roadster", "de"],
+  ["bmw z4",                      "z4",        "🟡 sharper Z3 successor; solid", "de"],
+  ["bmw m coupe",                 "m coupe",   "🟠 'clownshoe' cult classic; pricey", "de"],
+  ["bmw 3 series",                "328",       "🟡 E46 — buy on service history", "de"],
+  ["bmw 335i",                    "335i",      "🟡 fast; turbo/HPFP upkeep", "de"],
+  ["bmw m3",                      "m3",        "🟠 fast + costly to keep", "de"],
+  ["mercedes slk",                "slk",       "🟡 folding hardtop — watch pump/electrics", "de"],
+  ["mercedes clk",                "clk",       "🟠 handsome cruiser; electrics bite", "de"],
+  ["mercedes sl",                 " sl ",      "🟠 R129 tank but repairs bite", "de"],
+  ["audi tt",                     "audi tt",   "🟠 desirable but pricey to fix", "de"],
+  ["audi s4",                     "s4",        "🟠 fast; timing/oil upkeep", "de"],
+  ["porsche boxster",             "boxster",   "🟠 dream pick — IMS-bearing risk this cheap", "de"],
+  ["porsche cayman",              "cayman",    "🟠 best-driving Porsche; mostly over budget", "de"],
+  ["porsche 911",                 "911",       "🔴 icon; only rough/high-mile near budget", "de"],
+  ["porsche 944",                 "944",       "🟠 classic; belts/parts add up", "de"],
+  ["porsche 928",                 "928",       "🔴 V8 GT; cheap to buy, brutal to fix", "de"],
+  ["volkswagen gti",              "gti",       "🟢 practical hot hatch; fun daily", "de"],
+  ["volkswagen corrado",          "corrado",   "🔴 VR6 cult coupe; parts hunt", "de"],
+  ["volkswagen cabrio",           "cabrio",    "🟡 cheap + cheerful", "de"],
+  ["volkswagen eos",              "eos",       "🟡 hardtop vert; watch roof leaks", "de"],
+  ["volkswagen new beetle convertible","beetle","🟡 easy, fun daily", "de"],
+  // --- British / Swedish ---
+  ["jaguar xk8",                  "xk8",       "🟠 gorgeous GT; Nikasil on early engines", "uk"],
+  ["jaguar xkr",                  "xkr",       "🟠 supercharged Jag GT; pricey to keep", "uk"],
+  ["jaguar xjs",                  "xjs",       "🟠 old-school GT; complex", "uk"],
+  ["lotus elise",                 "elise",     "🔴 track toy, not a daily; over budget", "uk"],
+  ["mg mgb",                      "mgb",       "🔴 classic roadster; hobby car, not a daily", "uk"],
+  ["mini cooper",                 "mini",      "🟡 fun; watch clutch/CVT", "uk"],
+  ["volvo c70",                   "c70",       "🟡 comfy cruiser, great for trips", "uk"],
+  ["saab 9-3",                    "9-3",       "🟡 quirky sleeper, parts can be a hunt", "uk"],
+  ["saab 900",                    "900",       "🟡 classic quirky Saab", "uk"],
+  // --- Italian ---
+  ["alfa romeo spider",           "alfa",      "🔴 iconic; parts/rust — not a reliable daily", "it"],
+  ["fiat 124 spider",             "fiat",      "🔴 charming; rust + parts hunt", "it"],
+  ["maserati spyder",             "maserati",  "🔴 exotic upkeep — no real $2.5k runner", "it"],
 ];
+
+// Category aliases the user can type as the first arg.
+const CATEGORY = { japanese: "jp", jp: "jp", american: "us", us: "us", german: "de", de: "de",
+  british: "uk", uk: "uk", swedish: "uk", euro: "de", italian: "it", it: "it" };
+const ALL_ALIASES = ["roadsters", "roadster", "sports", "all", "cars", "undertheradar", "sleepers"];
 
 const CITIES = ["long beach", "los angeles", "san diego", "riverside", "santa barbara", "las vegas"];
 const ANCHORS = ["los angeles"]; // roadster mode sweeps many models; 1 broad anchor keeps it fast (FAR_AWAY trims region)
@@ -161,9 +192,13 @@ try {
   await send("initialize", { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "car-search", version: "3.0.0" } });
   notify("notifications/initialized", {});
 
-  const jobs = ROADSTER_MODE
-    ? ROADSTERS.flatMap(([q]) => ANCHORS.map((c) => [q, c]))
+  const catFilter = CATEGORY[RAW];
+  const catalogMode = Boolean(catFilter) || ALL_ALIASES.includes(RAW);
+  const models = catFilter ? ROADSTERS.filter((r) => r[3] === catFilter) : ROADSTERS;
+  const jobs = catalogMode
+    ? models.flatMap(([q]) => ANCHORS.map((c) => [q, c]))
     : CITIES.map((c) => [RAW, c]);
+  if (catalogMode) process.stderr.write(`sweeping ${models.length} models (this is a big scan — give it a few minutes)...\n`);
 
   const byId = new Map();
   let raw = 0;
@@ -182,7 +217,7 @@ try {
     real.push(l);
   }
 
-  const label = ROADSTER_MODE ? "under-the-radar roadsters" : `"${RAW}"`;
+  const label = catFilter ? `${RAW} sports cars` : (ALL_ALIASES.includes(RAW) ? "sports cars & convertibles" : `"${RAW}"`);
   console.log(`\n=== Facebook Marketplace: ${real.length} real ${label}, $${minPrice}-$${maxPrice}, ~250 mi of Long Beach ===`);
   console.log(`(scanned ${raw} raw results; filtered out bait, fakes, salvage/parts, and out-of-area)\n`);
   if (!real.length) {
@@ -198,8 +233,8 @@ try {
   }
 
   // Craigslist links (CL needs a browser to scrape; links are the reliable route).
-  const clModels = ROADSTER_MODE
-    ? ["mazda miata", "chrysler crossfire", "toyota mr2 spyder", "bmw z3", "jaguar xk8", "ford mustang convertible"]
+  const clModels = catalogMode
+    ? ["mazda miata", "chrysler crossfire", "toyota mr2 spyder", "bmw z3", "jaguar xk8", "ford mustang"]
     : [RAW];
   console.log(`=== Craigslist: tap-to-search links (clean title, $${minPrice}-$${maxPrice}) ===\n`);
   for (const m of clModels) {
