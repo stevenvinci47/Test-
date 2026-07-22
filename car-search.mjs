@@ -319,15 +319,17 @@ async function clSearch(query, matchKey) {
   const items = await clFetch(url);
   if (!Array.isArray(items)) return [];
   clScanned += items.length; // diagnostic: how much raw data Craigslist returned
-  const key = (matchKey || query.split(/\s+/).pop()).toLowerCase();
+  // matchKey "" = broad mode (keep ANY convertible, not just this model).
+  const key = (matchKey === undefined ? query.split(/\s+/).pop() : matchKey).toLowerCase();
   const out = [], seen = new Set();
   for (const it of items) {
     const d = clDecode(it, floor, maxPrice);
     if (!d) continue;
+    if (!/\b(19|20)\d{2}\b/.test(d.slug)) continue; // must be a dated car listing
     const flat = d.slug.replace(/-/g, " "); // de-hyphenate so the shared filters match
-    if (!d.slug.includes(key)) continue;
+    if (key && !d.slug.includes(key)) continue;
     if (!isConvertible(d.slug)) continue;
-    if (CL_SPAM.test(flat) || KILL.test(flat) || SCAM.test(flat) || PARTS.test(flat)) continue;
+    if (CL_SPAM.test(flat) || KILL.test(flat) || SCAM.test(flat) || PARTS.test(flat) || JUNK.test(flat)) continue;
     if (seen.has(d.slug)) continue;
     seen.add(d.slug);
     out.push(d);
@@ -439,6 +441,17 @@ try {
       if (clSeen.has(d.slug)) continue;
       clSeen.add(d.slug);
       d.tag = tagFor(d.title);
+      clAll.push(d);
+    }
+  }
+  // Broad passes — catch ANY convertible in budget, not just catalog models
+  // (Sebring, LeBaron, generic drop-tops...). matchKey "" disables model-match.
+  for (const bq of ["convertible", "roadster", "spyder", "cabriolet"]) {
+    process.stderr.write(`craigslist broad "${bq}"...\n`);
+    for (const d of await clSearch(bq, "")) {
+      if (clSeen.has(d.slug)) continue;
+      clSeen.add(d.slug);
+      d.tag = tagFor(d.title); // may be untagged if not a catalog model — still shown
       clAll.push(d);
     }
   }
