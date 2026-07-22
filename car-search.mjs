@@ -239,6 +239,7 @@ async function search(term, location) {
 const CL_POSTAL = "90802"; // Long Beach
 const CL_UA = "Mozilla/5.0 (Linux; Android 14; Pixel) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36";
 const CL_SPAM = /priced to (sale|sell)|money back|passed smog|cold ac|🔷|❗|✅|call or text|se habla|\bwholesale\b|no credit|buy here pay here|\bbhph\b|financing available/i;
+let clScanned = 0; // total raw Craigslist items seen across all model queries
 
 function clDecode(item, floor, ceil) {
   if (!Array.isArray(item)) return null;
@@ -296,6 +297,7 @@ async function clSearch(query, matchKey) {
     `&query=${encodeURIComponent(q)}&min_price=${floor}&max_price=${maxPrice}&searchDistance=250&postal=${CL_POSTAL}&sort=date`;
   const items = await clFetch(url);
   if (!Array.isArray(items)) return [];
+  clScanned += items.length; // diagnostic: how much raw data Craigslist returned
   const key = (matchKey || query.split(/\s+/).pop()).toLowerCase();
   const out = [], seen = new Set();
   for (const it of items) {
@@ -408,9 +410,11 @@ try {
   clAll.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || (a.price || 1e9) - (b.price || 1e9));
   const clNew = clAll.filter((d) => isNew(`cl:${d.slug}`)).length;
   console.log(`=== Craigslist: ${clAll.length} convertibles (🆕 ${clNew} new), $${minPrice}-$${maxPrice}, 250 mi of Long Beach (90802) ===`);
-  console.log(`(real prices — Craigslist has no $1 bait)\n`);
+  console.log(`(scanned ${clScanned} Craigslist listings; real prices, no $1 bait)\n`);
   if (!clAll.length) {
-    console.log("No Craigslist convertible matches parsed this run — try again, or browse:");
+    console.log(clScanned === 0
+      ? "Craigslist returned no data (blocked/throttled this run) — retry in a bit, or browse:"
+      : "Craigslist had listings but none were convertibles in budget — widen with a higher max price, or browse:");
     console.log("  https://losangeles.craigslist.org/search/cta?postal=90802&search_distance=250\n");
   } else {
     for (const d of clAll) {
