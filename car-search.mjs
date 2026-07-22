@@ -237,19 +237,21 @@ try {
     }
   }
 
-  // Craigslist links (CL needs a browser to scrape; links are the reliable route).
-  const clModels = catalogMode
-    ? ["mazda miata", "chrysler crossfire", "toyota mr2 spyder", "bmw z3", "jaguar xk8", "ford mustang"]
-    : [RAW];
-  console.log(`=== Craigslist: tap-to-search links (clean title, $${minPrice}-$${maxPrice}) ===\n`);
+  // Craigslist native 250-mile radius searches. CL supports search_distance +
+  // postal, so ONE link per model covers the whole area from Long Beach. CL
+  // blocks headless scraping and dropped its public API, so deep links beat a
+  // fragile terminal scraper. One CL search per model in the active sweep, to
+  // match the Facebook breadth.
+  const POSTAL = "90802"; // Long Beach, CA
+  const clModels = catalogMode ? models.map((r) => r[0]) : [RAW];
+  console.log(`=== Craigslist: 250-mile radius searches from Long Beach (clean title, $${minPrice}-$${maxPrice}) ===`);
+  console.log(`(open in a browser; each covers the full ${clModels.length > 1 ? "area for that model" : "250-mile area"})\n`);
   for (const m of clModels) {
     const q = encodeURIComponent(m);
     console.log(`${m}:`);
-    for (const r of CL_REGIONS.slice(0, 4)) {
-      console.log(`   https://${r}.craigslist.org/search/cta?query=${q}&min_price=${minPrice}&max_price=${maxPrice}&auto_title_status=1`);
-    }
-    console.log("");
+    console.log(`   https://losangeles.craigslist.org/search/cta?query=${q}&min_price=${minPrice}&max_price=${maxPrice}&search_distance=250&postal=${POSTAL}&auto_title_status=1`);
   }
+  console.log("");
 } finally {
   child.stdin.end(); child.kill(); process.exit(0);
 }
