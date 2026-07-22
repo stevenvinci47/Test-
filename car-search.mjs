@@ -145,7 +145,7 @@ const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bf
 const WANTED = /\blooking for\b|\bin search of\b|\biso\b|\bwtb\b|want(ed)? to buy/i;
 // JUNK — toys, diecast/scale models, literature, and small parts that carry a
 // year + a low real price ($3-$25) and so sneak past the other filters.
-const JUNK = /hot ?wheels|matchbox|die-?cast|maisto|b?burago|\bwelly\b|\bertl\b|toymax|greenlight|snapfast|1[:/]1[08]\b|1[:/]2[0-9]\b|1[:/]3[26]\b|1[:/]64\b|\bscale\b|model kit|collectible|collector car|jigsaw|puzzle|owner'?s? manual|shop manual|service manual|brochure|\bposter\b|print ad|\bmedal\b|magazine|wall decor|\blicense\b|\blamp\b|antenna|adapter|dipstick|harness|actuator|\bbrakes?\b|headlight|tail ?light|key.?fob|keyfob|fuel tank|intake pipe|\bshell\b|emblem|\bbadge\b|decal|\bstrap\b/i;
+const JUNK = /hot ?wheels|hotwheels|matchbox|die-?cast|maisto|b?burago|\bwelly\b|\bertl\b|toymax|greenlight|snapfast|solido|autoart|minichamps|\bnorev\b|kyosho|tamiya|revell|\bixo\b|motormax|\bjada\b|schuco|\bcorgi\b|\bdinky\b|franklin mint|danbury mint|spark model|1[:/]1[08]\b|1[:/]2[0-9]\b|1[:/]3[26]\b|1[:/]64\b|\bscale\b|model kit|collectible|collector car|jigsaw|puzzle|owner'?s? manual|shop manual|service manual|brochure|\bposter\b|print ad|\bmedal\b|magazine|wall decor|\blicense\b|\blamp\b|antenna|adapter|dipstick|harness|actuator|\bbrakes?\b|headlight|tail ?light|key.?fob|keyfob|fuel tank|intake pipe|\bshell\b|emblem|\bbadge\b|decal|\bstrap\b/i;
 
 const yearOf = (t) => { const m = t.match(/\b(19|20)\d{2}\b/); return m ? Number(m[0]) : null; };
 
@@ -233,6 +233,27 @@ async function search(term, location) {
     arguments: { query: term, marketplace: "facebook", location, minPrice, maxPrice, limit: perSearch },
   });
   return (res.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+}
+
+// Fetch a Facebook listing's detail text to recover the real price + mileage
+// that the search hides behind a $1 bait.
+async function getDetails(id) {
+  try {
+    const res = await send("tools/call", { name: "get_listing_details", arguments: { listingId: id, marketplace: "facebook" } });
+    return (res.result?.content ?? []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  } catch { return ""; }
+}
+function extractPrice(text) {
+  const nums = [...text.matchAll(/\$\s?(\d{1,3}(?:,\d{3})+|\d{3,6})/g)].map((m) => Number(m[1].replace(/,/g, "")));
+  const plausible = nums.filter((n) => n >= 500 && n <= 90000); // skip "$500 down", fees, etc. at the extremes
+  return plausible.length ? Math.max(...plausible) : null;
+}
+function extractMiles(text) {
+  let m = text.match(/(\d{1,3}(?:,\d{3})+)\s*(?:miles|mi\b|mileage|odometer)/i);
+  if (m) return Number(m[1].replace(/,/g, ""));
+  m = text.match(/(\d{2,3})\s*k\b\s*(?:miles|mi\b)?/i); // "120k", "120k miles"
+  if (m) return Number(m[1]) * 1000;
+  return null;
 }
 
 // ---- Craigslist (SAPI JSON feed; real prices, no $1 bait) ----
@@ -372,6 +393,20 @@ try {
 
   // Rank: reliability tier first, then newest year (FB prices are $1 bait).
   real.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || b.year - a.year);
+
+  // Enrich the top-ranked results with the REAL price + mileage (the search
+  // hides these behind $1 bait). Limited count so the run stays reasonably fast;
+  // skip with FAST=1.
+  if (!process.env.FAST) {
+    const N = Math.min(real.length, 18);
+    if (N) process.stderr.write(`fetching real price + mileage for top ${N}...\n`);
+    for (let i = 0; i < N; i++) {
+      const t = await getDetails(real[i].id);
+      real[i].realPrice = extractPrice(t);
+      real[i].miles = extractMiles(t);
+      await sleep(500 + Math.floor(Math.random() * 600));
+    }
+  }
   const fbNew = real.filter((l) => isNew(`fb:${l.id}`)).length;
   const label = catFilter ? `${RAW} sports cars` : (ALL_ALIASES.includes(RAW) ? "sports cars & convertibles" : `"${RAW}"`);
   console.log(`\n=== Facebook Marketplace: ${real.length} real ${label} (🆕 ${fbNew} new), $${minPrice}-$${maxPrice}, ~250 mi of Long Beach ===`);
@@ -382,9 +417,10 @@ try {
     for (const l of real) {
       const url = `https://www.facebook.com/marketplace/item/${l.id}`;
       const fresh = isNew(`fb:${l.id}`);
-      if (fresh) newListings.push({ label: l.title, price: l.num <= 1 ? "?" : l.price, url });
-      const shown = l.num <= 1 ? "price hidden — open to see" : l.price;
-      console.log(`${fresh ? "🆕 " : ""}${shown} - ${l.title}${l.tag ? "  " + l.tag : ""}`);
+      const shown = l.realPrice ? `$${l.realPrice.toLocaleString()}` : (l.num <= 1 ? "price hidden — open to see" : l.price);
+      const miles = l.miles ? ` · ${l.miles.toLocaleString()} mi` : "";
+      if (fresh) newListings.push({ label: l.title, price: shown, url });
+      console.log(`${fresh ? "🆕 " : ""}${shown}${miles} - ${l.title}${l.tag ? "  " + l.tag : ""}`);
       if (l.loc) console.log(`   📍 ${l.loc}`);
       console.log(`   🔗 ${url}`);
       console.log("");
