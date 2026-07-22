@@ -25,30 +25,65 @@ const ROADSTER_MODE = ["roadsters", "roadster", "undertheradar", "sleepers"].inc
 
 // Under-the-radar roadsters/convertibles realistic (or dreamable) at a low budget.
 // note tag: 🟢 reliable sleeper · 🟡 fun, check upkeep · 🟠 dream pick, pricey to keep
+// Model catalog. Each row: [search term, keyword to match in a result title, tag].
 // 🟢 reliable daily · 🟡 fun, check upkeep · 🟠 cool but pricey to keep · 🔴 iconic money-pit / rarely real at budget
+// Add rows freely — the sweep uses column 1, the tagging uses column 2.
 const ROADSTERS = [
-  ["mazda miata",              "🟢 most reliable roadster — the safe sleeper"],
-  ["mazda mx-5",               "🟢 Miata by its other name"],
-  ["chrysler crossfire",       "🟢 Mercedes SLK underneath for pennies — top sleeper"],
-  ["toyota mr2 spyder",        "🟢 mid-engine Toyota roadster, rare + reliable"],
-  ["honda del sol",            "🟢 targa-top, bulletproof Honda"],
-  ["ford mustang convertible", "🟢 roomy, cheap parts — best road-trip daily here"],
-  ["toyota celica convertible","🟢 reliable Toyota drop-top sleeper"],
-  ["bmw z3",                   "🟢 the reliable BMW roadster"],
-  ["volvo c70 convertible",    "🟡 comfy cruiser sleeper, great for trips"],
-  ["nissan 350z roadster",     "🟡 lots of car for the money, rare under budget"],
-  ["nissan 300zx convertible", "🟡 90s icon; T-tops more common than verts"],
-  ["mercedes slk",             "🟡 folding hardtop — watch the electrics/pump"],
-  ["mercedes sl convertible",  "🟠 R129 is a tank but repairs bite"],
-  ["audi tt roadster",         "🟠 desirable but pricey to fix; rough ones only at budget"],
-  ["porsche boxster",          "🟠 dream pick — IMS-bearing risk; only tired ones this cheap"],
-  ["jaguar xk8 convertible",   "🟠 gorgeous GT, cheap to buy / pricey to fix; Nikasil on early ones"],
-  ["alfa romeo spider",        "🔴 iconic + characterful; parts/rust nightmare, not a reliable daily"],
-  ["maserati spyder",          "🔴 movie-car looks, exotic upkeep — never a real $2.5k running car"],
+  // --- Japanese: the reliable-fun core ---
+  ["mazda miata",                 "miata",     "🟢 most reliable roadster — the safe sleeper"],
+  ["mazda mx-5",                  "mx-5",      "🟢 Miata (MX-5) — most reliable roadster"],
+  ["mazda rx-8",                  "rx-8",      "🟡 rotary — cheap + fun, thirsty, apex-seal risk"],
+  ["honda s2000",                 "s2000",     "🟢 legendary roadster; peaky but reliable"],
+  ["honda del sol",               "del sol",   "🟢 targa-top, bulletproof Honda"],
+  ["toyota mr2 spyder",           "mr2",       "🟢 mid-engine Toyota roadster, rare + reliable"],
+  ["toyota celica convertible",   "celica",    "🟢 reliable Toyota drop-top sleeper"],
+  ["toyota solara convertible",   "solara",    "🟢 comfy Toyota — great road-trip daily"],
+  ["nissan 350z roadster",        "350z",      "🟡 lots of car for the money"],
+  ["nissan 300zx convertible",    "300zx",     "🟡 90s icon"],
+  ["mitsubishi eclipse spyder",   "eclipse",   "🟡 cheap + sporty, verify maintenance"],
+  ["mitsubishi 3000gt spyder",    "3000gt",    "🔴 folding-hardtop unicorn, rare + pricey"],
+  // --- American: cheap, roomy, road-trip friendly ---
+  ["chrysler crossfire",          "crossfire", "🟢 Mercedes SLK underneath for pennies — top sleeper"],
+  ["ford mustang convertible",    "mustang",   "🟢 roomy + cheap parts — best road-trip daily"],
+  ["ford thunderbird",            "thunderbird","🟡 '02-05 retro is a comfy cruiser"],
+  ["chevrolet camaro convertible","camaro",    "🟡 V6 cheap, V8 fun; big cruiser"],
+  ["chevrolet corvette convertible","corvette","🟡 C4 cheap, C5 is the sweet spot"],
+  ["pontiac firebird convertible","firebird",  "🟡 F-body sibling; loud fun"],
+  ["pontiac solstice",            "solstice",  "🟡 GM roadster sleeper; usually above budget"],
+  ["cadillac allante",            "allante",   "🔴 quirky 80s/90s vert; parts are rare"],
+  ["plymouth prowler",            "prowler",   "🔴 hot-rod oddball; collector money now"],
+  // --- German: sharp but buy the service history ---
+  ["bmw z3",                      "z3",        "🟢 the reliable BMW roadster"],
+  ["bmw z4",                      "z4",        "🟡 sharper Z3 successor; solid"],
+  ["bmw 3 series convertible",    "325",       "🟡 E46 vert — buy on service history"],
+  ["bmw m3 convertible",          "m3",        "🟠 fast + costly to keep"],
+  ["mercedes slk",                "slk",       "🟡 folding hardtop — watch pump/electrics"],
+  ["mercedes clk convertible",    "clk",       "🟠 handsome cruiser; electrics bite"],
+  ["mercedes sl convertible",     " sl ",      "🟠 R129 tank but repairs bite"],
+  ["audi tt roadster",            "audi tt",   "🟠 desirable but pricey to fix"],
+  ["audi a4 cabriolet",           "a4",        "🟠 pretty; CVT + roof headaches"],
+  ["porsche boxster",             "boxster",   "🟠 dream pick — IMS-bearing risk this cheap"],
+  ["porsche 944",                 "944",       "🟠 classic; belts/parts add up"],
+  ["volkswagen cabrio",           "cabrio",    "🟡 cheap + cheerful"],
+  ["volkswagen eos",              "eos",       "🟡 hardtop vert; watch roof leaks"],
+  ["volkswagen new beetle convertible","beetle","🟡 easy, fun daily"],
+  // --- British / Swedish: character ---
+  ["jaguar xk8 convertible",      "xk8",       "🟠 gorgeous GT; Nikasil on early engines"],
+  ["jaguar xkr convertible",      "xkr",       "🟠 supercharged Jag GT; pricey to keep"],
+  ["jaguar xjs convertible",      "xjs",       "🟠 old-school GT; complex"],
+  ["mg mgb",                      "mgb",       "🔴 classic roadster; hobby car, not a daily"],
+  ["mini cooper convertible",     "mini",      "🟡 fun; watch clutch/CVT"],
+  ["volvo c70 convertible",       "c70",       "🟡 comfy cruiser, great for trips"],
+  ["saab 9-3 convertible",        "9-3",       "🟡 quirky sleeper, parts can be a hunt"],
+  ["saab 900 convertible",        "900",       "🟡 classic quirky Saab"],
+  // --- Italian: movie-car looks, exotic bills ---
+  ["alfa romeo spider",           "alfa",      "🔴 iconic; parts/rust — not a reliable daily"],
+  ["fiat 124 spider",             "fiat",      "🔴 charming; rust + parts hunt"],
+  ["maserati spyder",             "maserati",  "🔴 exotic upkeep — no real $2.5k runner"],
 ];
 
 const CITIES = ["long beach", "los angeles", "san diego", "riverside", "santa barbara", "las vegas"];
-const ANCHORS = ["los angeles", "san diego"]; // used in roadster mode to keep search count sane
+const ANCHORS = ["los angeles"]; // roadster mode sweeps many models; 1 broad anchor keeps it fast (FAR_AWAY trims region)
 const CL_REGIONS = ["losangeles", "orangecounty", "inlandempire", "sandiego", "ventura", "bakersfield", "lasvegas"];
 
 const FAR_AWAY = /Florida|Texas|Georgia|Carolina|Ohio|Illinois|New York|Washington|Oregon|Colorado|Utah|Spain|Mexico|Canada|,\s*(FL|TX|GA|NC|SC|OH|IL|NY|WA|OR|CO|UT)\b/i;
@@ -69,34 +104,11 @@ function looksFake(l) {
   return false;
 }
 
-// Reliability tag for output: match the title against the model list. Use a
-// distinctive keyword per model so "miata", "crossfire", "mr2", etc. tag right.
-const TAG_KEYS = [
-  ["miata", "🟢 most reliable roadster — the safe sleeper"],
-  ["mx-5", "🟢 Miata (MX-5) — most reliable roadster"],
-  ["crossfire", "🟢 Mercedes SLK underneath for pennies — top sleeper"],
-  ["mr2", "🟢 mid-engine Toyota roadster, rare + reliable"],
-  ["del sol", "🟢 targa-top, bulletproof Honda"],
-  ["mustang", "🟢 roomy + cheap parts — best road-trip daily"],
-  ["celica", "🟢 reliable Toyota drop-top sleeper"],
-  ["z3", "🟢 the reliable BMW roadster"],
-  ["c70", "🟡 comfy Volvo cruiser, great for trips"],
-  ["350z", "🟡 lots of car for the money"],
-  ["300zx", "🟡 90s icon"],
-  ["slk", "🟡 folding hardtop — watch electrics/pump"],
-  ["sl500", "🟠 R129 tank but repairs bite"],
-  ["sl320", "🟠 R129 tank but repairs bite"],
-  ["audi tt", "🟠 desirable but pricey to fix"],
-  ["boxster", "🟠 dream pick — IMS-bearing risk at this price"],
-  ["xk8", "🟠 gorgeous GT, pricey to fix"],
-  ["xkr", "🟠 supercharged Jag GT, pricey to fix"],
-  ["jaguar", "🟠 gorgeous GT, pricey to fix"],
-  ["alfa", "🔴 iconic but parts/rust nightmare — not a reliable daily"],
-  ["maserati", "🔴 exotic upkeep — verify everything twice"],
-];
+// Reliability tag for output: match a result title against the catalog's
+// keyword column (column 2). First match wins, so order the catalog sensibly.
 function tagFor(title) {
-  const t = title.toLowerCase();
-  for (const [key, note] of TAG_KEYS) if (t.includes(key)) return note;
+  const t = " " + title.toLowerCase() + " ";
+  for (const [, key, note] of ROADSTERS) if (t.includes(key)) return note;
   return "";
 }
 
