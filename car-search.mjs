@@ -256,18 +256,35 @@ function clDecode(item, floor, ceil) {
   return { slug, title: rest.join(" ").replace(/\b\w/g, (c) => c.toUpperCase()), price, loc };
 }
 
-async function clSearch(model) {
+async function clFetch(url) {
+  // One retry with a hard timeout so a slow/blocked request can't stall the sweep.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000);
+    try {
+      const r = await fetch(url, { headers: { "User-Agent": CL_UA, Accept: "application/json" }, signal: ctrl.signal });
+      clearTimeout(timer);
+      return JSON.parse(await r.text())?.data?.items;
+    } catch {
+      clearTimeout(timer);
+    }
+  }
+  return null;
+}
+
+// query = what we search Craigslist for; matchKey = the distinctive model token
+// that must appear in the slug (e.g. "mr2" for "toyota mr2 spyder", not "spyder").
+async function clSearch(query, matchKey) {
   const floor = Math.max(minPrice, 1);
+  // Drop a trailing body-style word so the CL text search isn't over-narrow
+  // ("toyota mr2 spyder" returns nothing; "toyota mr2" works).
+  const q = query.replace(/\s+(spyder|spider|convertible|roadster|coupe|cabriolet|cabrio)$/i, "");
   const url =
     `https://sapi.craigslist.org/web/v8/postings/search/full?batch=1-0-360-0-0&cc=US&lang=en&searchPath=cta` +
-    `&query=${encodeURIComponent(model)}&min_price=${floor}&max_price=${maxPrice}&searchDistance=250&postal=${CL_POSTAL}&sort=date`;
-  let items;
-  try {
-    const r = await fetch(url, { headers: { "User-Agent": CL_UA, Accept: "application/json" } });
-    items = JSON.parse(await r.text())?.data?.items;
-  } catch { return []; }
+    `&query=${encodeURIComponent(q)}&min_price=${floor}&max_price=${maxPrice}&searchDistance=250&postal=${CL_POSTAL}&sort=date`;
+  const items = await clFetch(url);
   if (!Array.isArray(items)) return [];
-  const key = model.split(/\s+/).pop().toLowerCase();
+  const key = (matchKey || query.split(/\s+/).pop()).toLowerCase();
   const out = [], seen = new Set();
   for (const it of items) {
     const d = clDecode(it, floor, maxPrice);
@@ -299,15 +316,22 @@ try {
   let raw = 0;
   for (const [term, city] of jobs) {
     process.stderr.write(`searching "${term}" in ${city}...\n`);
-    for (const l of parseBlocks(await search(term, city))) { raw++; if (!byId.has(l.id)) byId.set(l.id, l); }
+    try {
+      for (const l of parseBlocks(await search(term, city))) { raw++; if (!byId.has(l.id)) byId.set(l.id, l); }
+    } catch (e) {
+      process.stderr.write(`  (skipped "${term}": ${e.message})\n`); // one failure won't abort the sweep
+    }
   }
 
+  // Rank by reliability tier (🟢→🟡→🟠→🔴), then newest year (FB prices are bait).
+  const tierRank = (tag) => (tag?.startsWith("🟢") ? 0 : tag?.startsWith("🟡") ? 1 : tag?.startsWith("🟠") ? 2 : tag?.startsWith("🔴") ? 3 : 4);
   const seen = new Set();
   const real = [];
-  for (const l of [...byId.values()].sort((a, b) => a.num - b.num)) {
+  for (const l of [...byId.values()]) {
     if (looksFake(l)) continue;
     if (!isConvertible(l.title)) continue; // buyer wants convertibles only
     l.tag = tagFor(l.title);
+    l.year = yearOf(l.title) || 0;
     if (catalogMode && !l.tag) continue; // drop tangential cars not in the catalog (Avalon, ES300, ...)
     const key = l.title.toLowerCase().replace(/[^a-z0-9]/g, "") + "|" + l.num;
     if (seen.has(key)) continue;
@@ -315,11 +339,13 @@ try {
     real.push(l);
   }
 
+  // Rank: reliability tier first, then newest year (FB prices are $1 bait).
+  real.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || b.year - a.year);
   const label = catFilter ? `${RAW} sports cars` : (ALL_ALIASES.includes(RAW) ? "sports cars & convertibles" : `"${RAW}"`);
   console.log(`\n=== Facebook Marketplace: ${real.length} real ${label}, $${minPrice}-$${maxPrice}, ~250 mi of Long Beach ===`);
-  console.log(`(scanned ${raw} raw results; filtered out bait, fakes, salvage/parts, and out-of-area)\n`);
+  console.log(`(scanned ${raw} raw results; filtered out bait, fakes, scams, salvage/parts, and out-of-area)\n`);
   if (!real.length) {
-    console.log("Nothing passed the filter at this budget. Try a higher maxPrice (e.g. 4000) — sleeper roadsters are thin under $2.5k.\n");
+    console.log("Nothing passed the filter at this budget. Try a higher maxPrice (e.g. 4000).\n");
   } else {
     for (const l of real) {
       const tag = l.tag;
@@ -332,19 +358,22 @@ try {
   }
 
   // --- Craigslist: real listings via SAPI (real prices, no $1 bait) ---
-  const clModels = catalogMode ? models.map((r) => r[0]) : [RAW];
+  // Pass [searchTerm, matchKeyword] so multi-word models (e.g. "toyota mr2
+  // spyder") match on the distinctive token ("mr2") in the slug.
+  const clModels = catalogMode ? models.map((r) => [r[0], r[1]]) : [[RAW, RAW.split(/\s+/).pop()]];
   process.stderr.write(`\nsweeping Craigslist for ${clModels.length} models...\n`);
   const clAll = [], clSeen = new Set();
-  for (const m of clModels) {
-    process.stderr.write(`craigslist "${m}"...\n`);
-    for (const d of await clSearch(m)) {
+  for (const [term, kw] of clModels) {
+    process.stderr.write(`craigslist "${term}"...\n`);
+    for (const d of await clSearch(term, kw)) {
       if (clSeen.has(d.slug)) continue;
       clSeen.add(d.slug);
       d.tag = tagFor(d.title);
       clAll.push(d);
     }
   }
-  clAll.sort((a, b) => (a.price || 1e9) - (b.price || 1e9));
+  // Rank: reliability tier first, then lowest real price.
+  clAll.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || (a.price || 1e9) - (b.price || 1e9));
   console.log(`=== Craigslist: ${clAll.length} convertibles, $${minPrice}-$${maxPrice}, 250 mi of Long Beach (90802) ===`);
   console.log(`(real prices — Craigslist has no $1 bait)\n`);
   if (!clAll.length) {
