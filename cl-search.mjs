@@ -29,7 +29,9 @@ const linkFor = () =>
   `https://losangeles.craigslist.org/search/cta?query=${encodeURIComponent(query)}` +
   `&min_price=${minPrice}&max_price=${maxPrice}&search_distance=250&postal=${POSTAL}&auto_title_status=1`;
 
-// Heuristic decode of one SAPI item array: pull a title, a price, and a location.
+// Decode one SAPI item. Craigslist encodes each posting's info in a URL slug
+// string like "wilmington-1981-toyota-celica-1300-obo" (city-year-make-model-
+// price-suffix), which is the reliable source of title/price/location.
 function decodeItem(item) {
   if (!Array.isArray(item)) return null;
   const strings = [];
@@ -41,17 +43,30 @@ function decodeItem(item) {
     else if (v && typeof v === "object") Object.values(v).forEach(walk);
   };
   walk(item);
-  // Title: the longest string that reads like a listing title (has a letter and
-  // isn't a url/host/path/category code).
-  const title = strings
-    .filter((s) => /[a-z]/i.test(s) && !/https?:|craigslist|\.org|^\/|^[a-z]{3}$/i.test(s) && s.length >= 5)
+
+  // The slug: lowercase, hyphenated, 4+ segments. Take the longest match.
+  const slug = strings
+    .filter((s) => /^[a-z0-9]+(-[a-z0-9]+){3,}$/.test(s))
     .sort((a, b) => b.length - a.length)[0];
-  // Price: a plausible dollar amount that isn't a posting id, year, or coordinate.
-  const price = numbers.find((n) => Number.isInteger(n) && n >= minPrice && n <= maxPrice);
-  // Location: a short place-like string (has a letter, has no digits, title-ish).
-  const loc = strings.find((s) => /^[A-Z][A-Za-z][A-Za-z .'-]{2,30}$/.test(s) && s !== title);
-  if (!title) return null;
-  return { title: title.trim(), price, loc: loc || "" };
+  if (!slug) return null;
+
+  const segs = slug.split("-");
+  const yr = (slug.match(/\b(19|20)\d{2}\b/) || [])[0];
+  // Price: prefer a structured number in range; else a slug segment that looks
+  // like a price (in range, not the model year).
+  let price =
+    numbers.find((n) => Number.isInteger(n) && n >= minPrice && n <= maxPrice && String(n) !== yr) ||
+    segs.map(Number).find((n) => n >= minPrice && n <= maxPrice && String(n) !== yr);
+  // Location = the leading city segment(s) before the year.
+  const yi = yr ? segs.indexOf(yr) : -1;
+  const loc = (yi > 0 ? segs.slice(0, yi) : [segs[0]]).join(" ").replace(/\b\w/g, (c) => c.toUpperCase());
+  // Human title = the make/model part after the year, cleaned up.
+  const rest = (yi >= 0 ? segs.slice(yi) : segs).filter(
+    (s) => !/^(obo|firm|cash|clean|title|runs|great|nice|price|neg|negotiable)$/.test(s) &&
+           !(/^\d+$/.test(s) && s !== yr) // drop stray price/number segments, keep the year
+  );
+  const title = rest.join(" ").replace(/\b\w/g, (c) => c.toUpperCase());
+  return { slug, title, price, loc };
 }
 
 try {
@@ -72,8 +87,8 @@ try {
   for (const it of items) {
     const d = decodeItem(it);
     if (!d) continue;
-    if (SPAM.test(d.title)) continue;                 // drop curbstoner spam
-    if (!d.title.toLowerCase().includes(model)) continue; // keep only this model
+    if (SPAM.test(d.slug)) continue;                  // drop curbstoner spam
+    if (!d.slug.includes(model)) continue;            // keep only this model
     rows.push(d);
   }
   // De-dupe by title+price.
