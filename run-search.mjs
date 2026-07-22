@@ -72,7 +72,11 @@ try {
 
   const res = await send("tools/call", { name: "search_marketplace", arguments: args });
   const contents = res.result?.content ?? [];
-  const text = contents.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  let text = contents.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+  // The server prints each listing's ID (🆔 <id>) but not its URL. Add a
+  // clickable Facebook link right after every ID so results are tappable.
+  text = text.replace(/(🆔\s*)(\S+)/g, (_, tag, id) =>
+    `${tag}${id}\n   🔗 https://www.facebook.com/marketplace/item/${id}`);
   console.log(text || JSON.stringify(res.result ?? res.error, null, 2));
 } finally {
   child.stdin.end();
