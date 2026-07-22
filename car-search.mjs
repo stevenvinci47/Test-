@@ -15,7 +15,7 @@
 //   node car-search.mjs "mazda miata" 3000 800
 
 import { spawn, execSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, readFileSync } from "node:fs";
 
 const RAW = (process.argv[2] || "roadsters").toLowerCase();
 const maxPrice = Number(process.argv[3] || 3000);
@@ -27,6 +27,14 @@ const perSearch = 40;
 const captured = [];
 const _log = console.log.bind(console);
 console.log = (...a) => { const s = a.join(" "); captured.push(s); _log(s); };
+
+// "New since last run" cache — remember listings we've already seen so re-runs
+// can highlight only fresh cars (the backbone of a deal monitor).
+const SEEN_FILE = "car-seen.json";
+let seenIds = new Set();
+try { seenIds = new Set(JSON.parse(readFileSync(SEEN_FILE, "utf8"))); } catch {}
+const isNew = (k) => !seenIds.has(k);
+const newListings = []; // {label, price, url} for optional push notification
 const CURRENT_YEAR = new Date().getFullYear();
 // Model catalog. Each row: [search term, keyword to match in a title, tag, category].
 // 🟢 reliable daily · 🟡 fun, check upkeep · 🟠 cool but pricey to keep · 🔴 iconic money-pit / rarely real at budget
@@ -341,18 +349,21 @@ try {
 
   // Rank: reliability tier first, then newest year (FB prices are $1 bait).
   real.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || b.year - a.year);
+  const fbNew = real.filter((l) => isNew(`fb:${l.id}`)).length;
   const label = catFilter ? `${RAW} sports cars` : (ALL_ALIASES.includes(RAW) ? "sports cars & convertibles" : `"${RAW}"`);
-  console.log(`\n=== Facebook Marketplace: ${real.length} real ${label}, $${minPrice}-$${maxPrice}, ~250 mi of Long Beach ===`);
+  console.log(`\n=== Facebook Marketplace: ${real.length} real ${label} (🆕 ${fbNew} new), $${minPrice}-$${maxPrice}, ~250 mi of Long Beach ===`);
   console.log(`(scanned ${raw} raw results; filtered out bait, fakes, scams, salvage/parts, and out-of-area)\n`);
   if (!real.length) {
     console.log("Nothing passed the filter at this budget. Try a higher maxPrice (e.g. 4000).\n");
   } else {
     for (const l of real) {
-      const tag = l.tag;
+      const url = `https://www.facebook.com/marketplace/item/${l.id}`;
+      const fresh = isNew(`fb:${l.id}`);
+      if (fresh) newListings.push({ label: l.title, price: l.num <= 1 ? "?" : l.price, url });
       const shown = l.num <= 1 ? "price hidden — open to see" : l.price;
-      console.log(`${shown} - ${l.title}${tag ? "  " + tag : ""}`);
+      console.log(`${fresh ? "🆕 " : ""}${shown} - ${l.title}${l.tag ? "  " + l.tag : ""}`);
       if (l.loc) console.log(`   📍 ${l.loc}`);
-      console.log(`   🔗 https://www.facebook.com/marketplace/item/${l.id}`);
+      console.log(`   🔗 ${url}`);
       console.log("");
     }
   }
@@ -374,16 +385,35 @@ try {
   }
   // Rank: reliability tier first, then lowest real price.
   clAll.sort((a, b) => tierRank(a.tag) - tierRank(b.tag) || (a.price || 1e9) - (b.price || 1e9));
-  console.log(`=== Craigslist: ${clAll.length} convertibles, $${minPrice}-$${maxPrice}, 250 mi of Long Beach (90802) ===`);
+  const clNew = clAll.filter((d) => isNew(`cl:${d.slug}`)).length;
+  console.log(`=== Craigslist: ${clAll.length} convertibles (🆕 ${clNew} new), $${minPrice}-$${maxPrice}, 250 mi of Long Beach (90802) ===`);
   console.log(`(real prices — Craigslist has no $1 bait)\n`);
   if (!clAll.length) {
     console.log("No Craigslist convertible matches parsed this run — try again, or browse:");
     console.log("  https://losangeles.craigslist.org/search/cta?postal=90802&search_distance=250\n");
   } else {
     for (const d of clAll) {
-      console.log(`${d.price ? "$" + d.price.toLocaleString() : "see listing"} - ${d.title}${d.tag ? "  " + d.tag : ""}${d.loc ? "  📍 " + d.loc : ""}`);
+      const fresh = isNew(`cl:${d.slug}`);
+      if (fresh) newListings.push({ label: d.title, price: d.price ? "$" + d.price : "?", url: "craigslist" });
+      const priceStr = d.price ? "$" + d.price.toLocaleString() : "see listing";
+      console.log(`${fresh ? "🆕 " : ""}${priceStr} - ${d.title}${d.tag ? "  " + d.tag : ""}${d.loc ? "  📍 " + d.loc : ""}`);
     }
     console.log("");
+  }
+
+  // Persist the seen set and optionally push new listings to the phone via ntfy.
+  const allKeys = [...real.map((l) => `fb:${l.id}`), ...clAll.map((d) => `cl:${d.slug}`)];
+  try { writeFileSync(SEEN_FILE, JSON.stringify([...new Set([...seenIds, ...allKeys])])); } catch {}
+
+  const topic = process.env.NTFY_TOPIC;
+  if (newListings.length && topic) {
+    const top = newListings.slice(0, 10).map((n) => `${n.price} ${n.label}`).join("\n");
+    try {
+      execSync(`curl -s -H "Title: ${newListings.length} new convertibles" -d ${JSON.stringify(top)} https://ntfy.sh/${topic}`, { stdio: "ignore" });
+      process.stderr.write(`Pushed ${newListings.length} new listings to ntfy topic "${topic}".\n`);
+    } catch {}
+  } else if (newListings.length) {
+    process.stderr.write(`\n${newListings.length} new listings. For phone alerts, subscribe to a topic in the ntfy app and re-run with NTFY_TOPIC=your-topic.\n`);
   }
 
   // Save the whole report to a file and copy it to the clipboard for easy pasting.
