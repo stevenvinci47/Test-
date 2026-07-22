@@ -119,7 +119,12 @@ const CL_REGIONS = ["losangeles", "orangecounty", "inlandempire", "sandiego", "v
 
 const FAR_AWAY = /Florida|Texas|Georgia|Carolina|Ohio|Illinois|New York|Washington|Oregon|Colorado|Utah|Spain|Mexico|Canada|,\s*(FL|TX|GA|NC|SC|OH|IL|NY|WA|OR|CO|UT)\b/i;
 // KILL words in the title — immediate discards (from used-car-finder playbook).
-const KILL = /salvage|rebuilt|engine swap|for parts|parts only|part out|mechanic special|project|as[\s-]?is|no title|non[\s-]?op|doesn'?t run|not running|won'?t run|blown|bill of sale only|flood/i;
+const KILL = /salvage|rebuilt|engine swap|mechanic special|project|as[\s-]?is|no title|non[\s-]?op|doesn'?t run|not running|won'?t run|blown|bill of sale only|flood/i;
+// PARTS listings — someone selling components, not a whole car. These flooded
+// the results ("parting out", "partes", "engine", "transmission", "bumper"...).
+const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bfor part\b|\bengine\b|\bmotor\b|\btransmission\b|\btranny\b|long block|\bbumper\b|\bfender\b|\bexhaust\b|\bheader\b|\bhood\b|\becu\b|\bswap\b/i;
+// WANTED / ISO posts — someone looking to buy, not sell.
+const WANTED = /\blooking for\b|\bin search of\b|\biso\b|\bwtb\b|want(ed)? to buy/i;
 
 const yearOf = (t) => { const m = t.match(/\b(19|20)\d{2}\b/); return m ? Number(m[0]) : null; };
 
@@ -135,7 +140,9 @@ function looksFake(l) {
   if (y >= 2012 && l.num < 3000) return true;   // a <~14yr car this cheap = bait/scam
   if (FAR_AWAY.test(l.loc)) return true;        // outside ~250 mi
   if (!/^\$/.test(l.price)) return true;        // USD only (drops €/foreign)
-  if (KILL.test(l.title)) return true;          // salvage/rebuilt/parts/project
+  if (KILL.test(l.title)) return true;          // salvage/rebuilt/project
+  if (PARTS.test(l.title)) return true;         // parting out / components, not a car
+  if (WANTED.test(l.title)) return true;        // ISO / looking-to-buy posts
   return false;
 }
 
@@ -215,6 +222,8 @@ try {
   const real = [];
   for (const l of [...byId.values()].sort((a, b) => a.num - b.num)) {
     if (looksFake(l)) continue;
+    l.tag = tagFor(l.title);
+    if (catalogMode && !l.tag) continue; // drop tangential cars not in the catalog (Avalon, ES300, ...)
     const key = l.title.toLowerCase().replace(/[^a-z0-9]/g, "") + "|" + l.num;
     if (seen.has(key)) continue;
     seen.add(key);
@@ -228,7 +237,7 @@ try {
     console.log("Nothing passed the filter at this budget. Try a higher maxPrice (e.g. 4000) — sleeper roadsters are thin under $2.5k.\n");
   } else {
     for (const l of real) {
-      const tag = tagFor(l.title);
+      const tag = l.tag;
       const shown = l.num <= 1 ? "price hidden — open to see" : l.price;
       console.log(`${shown} - ${l.title}${tag ? "  " + tag : ""}`);
       if (l.loc) console.log(`   📍 ${l.loc}`);
