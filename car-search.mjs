@@ -359,7 +359,19 @@ try {
 
   // Save the whole report to a file and copy it to the clipboard for easy pasting.
   const text = captured.join("\n");
-  try { writeFileSync("car-results.txt", text); process.stderr.write("\nSaved report to car-results.txt\n"); } catch {}
+  // Prefer the phone's Downloads folder so it's visible in the file manager.
+  const HOME = process.env.HOME || ".";
+  const targets = [
+    `${HOME}/storage/downloads/car-results.txt`, // Termux after `termux-setup-storage`
+    "/sdcard/Download/car-results.txt",
+    "/storage/emulated/0/Download/car-results.txt",
+    "car-results.txt",                            // fallback: current folder
+  ];
+  let savedTo = "";
+  for (const p of targets) {
+    try { writeFileSync(p, text); savedTo = p; break; } catch {}
+  }
+  if (savedTo) process.stderr.write(`\nSaved report to ${savedTo}\n`);
   let copied = false;
   for (const cmd of ["termux-clipboard-set", "pbcopy", "xclip -selection clipboard", "xsel --clipboard --input"]) {
     try { execSync(cmd, { input: text, stdio: ["pipe", "ignore", "ignore"] }); copied = true; break; } catch {}
