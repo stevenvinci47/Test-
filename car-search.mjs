@@ -14,6 +14,21 @@ import { spawn } from "node:child_process";
 const query = process.argv[2] || "convertible";
 const maxPrice = Number(process.argv[3] || 2500);
 const perCity = Number(process.argv[4] || 30);
+const minPrice = 1; // only listings that actually show a price ($1+), not $0 blanks
+
+// States clearly outside a ~250-mile radius of Long Beach — drop them, since the
+// marketplace search sometimes returns nationwide/foreign results.
+const FAR_AWAY = /Florida|Texas|Georgia|Carolina|Ohio|Illinois|New York|Washington|Oregon|Colorado|Utah|Spain|,\s*[A-Z]{2}$/i;
+
+// A real car listing has a 4-digit model year in the title. This filters out
+// furniture, baby gear, toys, parts, and accessories that match "convertible".
+function isCar(l) {
+  if (!/^\$/.test(l.price)) return false;            // US dollars only
+  if (!/\b(18|19|20)\d{2}\b/.test(l.title)) return false; // must have a model year
+  if (!(l.num >= minPrice && l.num <= maxPrice)) return false;
+  if (FAR_AWAY.test(l.loc)) return false;
+  return true;
+}
 
 // Major cities within ~250 miles of Long Beach, CA.
 const CITIES = [
@@ -83,18 +98,18 @@ try {
     process.stderr.write(`searching ${city}...\n`);
     const res = await send("tools/call", {
       name: "search_marketplace",
-      arguments: { query, marketplace: "facebook", location: city, maxPrice, limit: perCity },
+      arguments: { query, marketplace: "facebook", location: city, minPrice, maxPrice, limit: perCity },
     });
     const text = (res.result?.content ?? [])
       .filter((c) => c.type === "text").map((c) => c.text).join("\n");
     for (const l of parseBlocks(text)) if (!byId.has(l.id)) byId.set(l.id, l);
   }
 
-  const all = [...byId.values()].sort((a, b) => a.num - b.num);
+  const all = [...byId.values()].filter(isCar).sort((a, b) => a.num - b.num);
   if (!all.length) {
-    console.log('No listings found (or Facebook is unreachable from this network).');
+    console.log('No matching car listings found (or Facebook is unreachable from this network).');
   } else {
-    console.log(`\n=== ${all.length} unique "${query}" listings under $${maxPrice} within ~250 mi of Long Beach ===\n`);
+    console.log(`\n=== ${all.length} car listings for "${query}", $${minPrice}–$${maxPrice}, within ~250 mi of Long Beach ===\n`);
     for (const l of all) {
       console.log(`${l.price} - ${l.title}`);
       if (l.loc) console.log(`   📍 ${l.loc}`);
