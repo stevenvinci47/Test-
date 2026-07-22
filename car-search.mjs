@@ -122,7 +122,7 @@ const FAR_AWAY = /Florida|Texas|Georgia|Carolina|Ohio|Illinois|New York|Washingt
 const KILL = /salvage|rebuilt|engine swap|mechanic special|project|as[\s-]?is|no title|non[\s-]?op|doesn'?t run|not running|won'?t run|blown|bill of sale only|flood/i;
 // PARTS listings — someone selling components, not a whole car. These flooded
 // the results ("parting out", "partes", "engine", "transmission", "bumper"...).
-const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bfor part\b|\bengine\b|\bmotor\b|\btransmission\b|\btranny\b|long block|\bbumper\b|\bfender\b|\bexhaust\b|\bheader\b|\bhood\b|\becu\b|\bswap\b/i;
+const PARTS = /\bparts?\b|\bpartes\b|\bpartout\b|parting|parted|part[\s-]out|\bfor part\b|\bengine\b|\bmotor\b|\btransmission\b|\btranny\b|long block|\bbumper\b|\bfender\b|\bexhaust\b|\bheader\b|\bhood\b|\becu\b|\bswap\b|\brims?\b|\bwheels?\b|\bspoiler\b|duckbill|\bcoilovers?\b|\bseats?\b|\bdoor panel\b/i;
 // WANTED / ISO posts — someone looking to buy, not sell.
 const WANTED = /\blooking for\b|\bin search of\b|\biso\b|\bwtb\b|want(ed)? to buy/i;
 
