@@ -25,20 +25,26 @@ const ROADSTER_MODE = ["roadsters", "roadster", "undertheradar", "sleepers"].inc
 
 // Under-the-radar roadsters/convertibles realistic (or dreamable) at a low budget.
 // note tag: 🟢 reliable sleeper · 🟡 fun, check upkeep · 🟠 dream pick, pricey to keep
+// 🟢 reliable daily · 🟡 fun, check upkeep · 🟠 cool but pricey to keep · 🔴 iconic money-pit / rarely real at budget
 const ROADSTERS = [
-  ["mazda miata",             "🟢 most reliable roadster — the safe sleeper"],
-  ["mazda mx-5",              "🟢 Miata by its other name"],
-  ["chrysler crossfire",      "🟢 Mercedes SLK underneath for pennies — top sleeper"],
-  ["toyota mr2 spyder",       "🟢 mid-engine Toyota roadster, rare + reliable"],
-  ["honda del sol",           "🟢 targa-top, bulletproof Honda"],
-  ["bmw z3",                  "🟢 the reliable BMW roadster"],
-  ["mercedes slk",            "🟡 folding hardtop — watch the electrics/pump"],
-  ["saab 9-3 convertible",    "🟡 quirky sleeper, parts can be a hunt"],
-  ["volvo c70 convertible",   "🟡 comfy cruiser sleeper"],
-  ["mitsubishi eclipse spyder","🟡 cheap and sporty, verify maintenance"],
-  ["nissan 350z roadster",    "🟡 lots of car for the money, rare under budget"],
-  ["audi tt roadster",        "🟠 desirable but pricey to fix; rough ones only at budget"],
-  ["porsche boxster",         "🟠 dream pick — IMS-bearing risk; only tired ones this cheap"],
+  ["mazda miata",              "🟢 most reliable roadster — the safe sleeper"],
+  ["mazda mx-5",               "🟢 Miata by its other name"],
+  ["chrysler crossfire",       "🟢 Mercedes SLK underneath for pennies — top sleeper"],
+  ["toyota mr2 spyder",        "🟢 mid-engine Toyota roadster, rare + reliable"],
+  ["honda del sol",            "🟢 targa-top, bulletproof Honda"],
+  ["ford mustang convertible", "🟢 roomy, cheap parts — best road-trip daily here"],
+  ["toyota celica convertible","🟢 reliable Toyota drop-top sleeper"],
+  ["bmw z3",                   "🟢 the reliable BMW roadster"],
+  ["volvo c70 convertible",    "🟡 comfy cruiser sleeper, great for trips"],
+  ["nissan 350z roadster",     "🟡 lots of car for the money, rare under budget"],
+  ["nissan 300zx convertible", "🟡 90s icon; T-tops more common than verts"],
+  ["mercedes slk",             "🟡 folding hardtop — watch the electrics/pump"],
+  ["mercedes sl convertible",  "🟠 R129 is a tank but repairs bite"],
+  ["audi tt roadster",         "🟠 desirable but pricey to fix; rough ones only at budget"],
+  ["porsche boxster",          "🟠 dream pick — IMS-bearing risk; only tired ones this cheap"],
+  ["jaguar xk8 convertible",   "🟠 gorgeous GT, cheap to buy / pricey to fix; Nikasil on early ones"],
+  ["alfa romeo spider",        "🔴 iconic + characterful; parts/rust nightmare, not a reliable daily"],
+  ["maserati spyder",          "🔴 movie-car looks, exotic upkeep — never a real $2.5k running car"],
 ];
 
 const CITIES = ["long beach", "los angeles", "san diego", "riverside", "santa barbara", "las vegas"];
@@ -71,14 +77,22 @@ const TAG_KEYS = [
   ["crossfire", "🟢 Mercedes SLK underneath for pennies — top sleeper"],
   ["mr2", "🟢 mid-engine Toyota roadster, rare + reliable"],
   ["del sol", "🟢 targa-top, bulletproof Honda"],
+  ["mustang", "🟢 roomy + cheap parts — best road-trip daily"],
+  ["celica", "🟢 reliable Toyota drop-top sleeper"],
   ["z3", "🟢 the reliable BMW roadster"],
-  ["slk", "🟡 folding hardtop — watch the electrics/pump"],
-  ["9-3", "🟡 Saab sleeper, parts can be a hunt"],
-  ["c70", "🟡 comfy Volvo cruiser sleeper"],
-  ["eclipse", "🟡 cheap and sporty, verify maintenance"],
+  ["c70", "🟡 comfy Volvo cruiser, great for trips"],
   ["350z", "🟡 lots of car for the money"],
+  ["300zx", "🟡 90s icon"],
+  ["slk", "🟡 folding hardtop — watch electrics/pump"],
+  ["sl500", "🟠 R129 tank but repairs bite"],
+  ["sl320", "🟠 R129 tank but repairs bite"],
   ["audi tt", "🟠 desirable but pricey to fix"],
   ["boxster", "🟠 dream pick — IMS-bearing risk at this price"],
+  ["xk8", "🟠 gorgeous GT, pricey to fix"],
+  ["xkr", "🟠 supercharged Jag GT, pricey to fix"],
+  ["jaguar", "🟠 gorgeous GT, pricey to fix"],
+  ["alfa", "🔴 iconic but parts/rust nightmare — not a reliable daily"],
+  ["maserati", "🔴 exotic upkeep — verify everything twice"],
 ];
 function tagFor(title) {
   const t = title.toLowerCase();
@@ -173,7 +187,7 @@ try {
 
   // Craigslist links (CL needs a browser to scrape; links are the reliable route).
   const clModels = ROADSTER_MODE
-    ? ["mazda miata", "chrysler crossfire", "toyota mr2 spyder", "bmw z3", "mercedes slk"]
+    ? ["mazda miata", "chrysler crossfire", "toyota mr2 spyder", "bmw z3", "jaguar xk8", "ford mustang convertible"]
     : [RAW];
   console.log(`=== Craigslist: tap-to-search links (clean title, $${minPrice}-$${maxPrice}) ===\n`);
   for (const m of clModels) {
